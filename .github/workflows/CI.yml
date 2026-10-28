@@ -86,19 +86,19 @@ jobs:
           docker network create bouton-rouge-network
 
           docker run -d \
-            --name backend-test \
+            --name backend \
             --network bouton-rouge-network \
             -p 3000:3000 \
             ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-backend:${{ github.sha }}
 
           docker run -d \
-            --name frontend-test \
+            --name frontend \
             --network bouton-rouge-network \
             -p 4200:80 \
             ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-frontend:${{ github.sha }}
 
           cleanup() {
-            docker rm -f backend-test frontend-test 2>/dev/null || true
+            docker rm -f backend frontend 2>/dev/null || true
             docker network rm bouton-rouge-network 2>/dev/null || true
           }
           trap cleanup EXIT
@@ -130,8 +130,8 @@ jobs:
             return 1
           }
 
-          check_health backend-test
-          check_health frontend-test
+          check_health backend
+          check_health frontend
 
 
       - name: Scan backend image avec Trivy
