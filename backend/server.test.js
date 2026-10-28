@@ -4,6 +4,10 @@ const routes = {};
 const fakeApp = {
   use: jest.fn(),
 
+  get: jest.fn((path, callback) => {
+    routes[path] = callback;
+  }),
+
   post: jest.fn((path, callback) => {
     routes[path] = callback;
   }),
@@ -179,4 +183,25 @@ test("utilise le port défini dans les variables d'environnement", () => {
   } else {
     process.env.PORT = originalPort;
   }
+});
+
+// =========================
+// TEST HEALTHCHECK
+// =========================
+describe("GET /health", () => {
+  test("vérifie que la route health retourne 200 et le statut ok", () => {
+    const req = {};
+
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+
+    routes["/health"](req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      status: "ok"
+    });
+  });
 });
