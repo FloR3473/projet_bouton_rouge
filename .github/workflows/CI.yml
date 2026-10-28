@@ -78,6 +78,80 @@ jobs:
             -t ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-frontend:staging \
             ./frontend
 
+
+      - name: Tester les healthchecks des conteneurs
+        run: |
+          set -e
+
+          docker network create bouton-rouge-network
+
+          docker run -d \
+            --name backend-test \
+            --network bouton-rouge-network \
+            -p 3000:3000 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-backend:${{ github.sha }}
+
+          docker run -d \
+            --name frontend-test \
+            --network bouton-rouge-network \
+            -p 4200:80 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-frontend:${{ github.sha }}
+
+          cleanup() {
+            docker rm -f backend-test frontend-test 2>/dev/null || true
+            docker network rm bouton-rouge-network 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          check_health() {
+            container="$1"
+
+            for i in $(seq 1 30); do
+              status=$(docker inspect \
+                --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+                "$container")
+
+              if [ "$status" = "healthy" ]; then
+                echo "$container est healthy"
+                return 0
+              fi
+
+              if [ "$status" = "unhealthy" ] || [ "$status" = "missing" ]; then
+                echo "Échec du healthcheck : $container ($status)"
+                docker logs "$container"
+                return 1
+              fi
+
+              sleep 2
+            done
+
+            echo "Timeout : $container n'est pas healthy"
+            docker logs "$container"
+            return 1
+          }
+
+          check_health backend-test
+          check_health frontend-test
+
+
+      - name: Scan backend image with Trivy
+        uses: aquasecurity/trivy-action@0.33.0
+        with:
+          image-ref: bouton-rouge-backend:staging
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Scan frontend image with Trivy
+        uses: aquasecurity/trivy-action@0.33.0
+        with:
+          image-ref: bouton-rouge-frontend:staging
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
       - name: Push vers Docker Hub
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-backend:${{ github.sha }}
