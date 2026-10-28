@@ -135,14 +135,11 @@ jobs:
           check_health backend
           check_health frontend
 
-      # OWASP ZAP
-      - name: Préparer le dossier des rapports ZAP
-        run: |
+          echo "Lancement du scan OWASP ZAP..."
+
           mkdir -p "${RUNNER_TEMP}/zap"
           chmod 777 "${RUNNER_TEMP}/zap"
 
-      - name: Lancer le scan OWASP ZAP
-        run: |
           docker run --rm \
             --network bouton-rouge-network \
             -v "${RUNNER_TEMP}/zap:/zap/wrk/:rw" \
@@ -151,6 +148,7 @@ jobs:
               -t http://frontend \
               -r zap-report.html \
               -J zap-report.json
+
 
       - name: Archiver les rapports OWASP ZAP
         if: always()
