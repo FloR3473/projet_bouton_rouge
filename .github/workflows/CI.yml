@@ -66,6 +66,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # BUILD
       - name: Build de l'image
         run: |
           docker build \
@@ -79,11 +80,18 @@ jobs:
             ./frontend
 
 
+      # HEALTHCHECKS
       - name: Tester les healthchecks des conteneurs
         run: |
           set -e
 
           docker network create bouton-rouge-network
+
+          cleanup() {
+            docker rm -f backend frontend 2>/dev/null || true
+            docker network rm bouton-rouge-network 2>/dev/null || true
+          }
+          trap cleanup EXIT
 
           docker run -d \
             --name backend \
@@ -96,12 +104,6 @@ jobs:
             --network bouton-rouge-network \
             -p 4200:80 \
             ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-frontend:${{ github.sha }}
-
-          cleanup() {
-            docker rm -f backend frontend 2>/dev/null || true
-            docker network rm bouton-rouge-network 2>/dev/null || true
-          }
-          trap cleanup EXIT
 
           check_health() {
             container="$1"
@@ -133,25 +135,35 @@ jobs:
           check_health backend
           check_health frontend
 
-          echo "Lancement du scan OWASP ZAP..."
+      # OWASP ZAP
+      - name: Préparer le dossier des rapports ZAP
+        run: |
+          mkdir -p "${RUNNER_TEMP}/zap"
+          chmod 777 "${RUNNER_TEMP}/zap"
 
+      - name: Lancer le scan OWASP ZAP
+        run: |
           docker run --rm \
             --network bouton-rouge-network \
-            -v "$GITHUB_WORKSPACE:/zap/wrk/:rw" \
+            -v "${RUNNER_TEMP}/zap:/zap/wrk/:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
               -t http://frontend \
-              -r zap-report.html
+              -r zap-report.html \
+              -J zap-report.json
 
-      - name: Archiver le rapport OWASP ZAP
+      - name: Archiver les rapports OWASP ZAP
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zap-security-report
-          path: zap-report.html
-          if-no-files-found: ignore
+          name: zap-security-reports
+          path: |
+            ${{ runner.temp }}/zap/zap-report.html
+            ${{ runner.temp }}/zap/zap-report.json
+          if-no-files-found: warn
           retention-days: 14
 
+      # TRIVY
       - name: Scan backend image avec Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -170,6 +182,7 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
 
+      # PUBLICATION
       - name: Push vers Docker Hub
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-backend:${{ github.sha }}
