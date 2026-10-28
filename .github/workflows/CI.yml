@@ -96,6 +96,7 @@ jobs:
           docker run -d \
             --name backend \
             --network bouton-rouge-network \
+            --network-alias backend \
             -p 3000:3000 \
             ${{ secrets.DOCKERHUB_USERNAME }}/bouton_rouge-backend:${{ github.sha }}
 
