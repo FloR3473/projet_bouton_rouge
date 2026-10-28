@@ -133,6 +133,24 @@ jobs:
           check_health backend
           check_health frontend
 
+          echo "Lancement du scan OWASP ZAP..."
+
+          docker run --rm \
+            --network bouton-rouge-network \
+            -v "$GITHUB_WORKSPACE:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://frontend \
+              -r zap-report.html
+
+      - name: Archiver le rapport OWASP ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-report
+          path: zap-report.html
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Scan backend image avec Trivy
         uses: aquasecurity/trivy-action@v0.36.0
