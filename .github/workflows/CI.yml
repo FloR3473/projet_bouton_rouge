@@ -146,6 +146,7 @@ jobs:
             -v "${RUNNER_TEMP}/zap:/zap/wrk/:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
+              -I \
               -t http://frontend \
               -r zap-report.html \
               -J zap-report.json
